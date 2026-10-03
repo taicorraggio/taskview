@@ -19,12 +19,15 @@ const W = {
   future: 230,
 };
 
-const LEFT_OFFSETS = [
-  0,
-  W.epic,
-  W.epic + W.waiting,
-  W.epic + W.waiting + W.unscheduled,
-];
+interface LeftCol {
+  key: "waiting" | "unscheduled" | "overdue";
+  label: string;
+  width: number;
+  get: (row: TimelineRow) => TimelineTask[];
+  showDate: boolean;
+  headerExtra: string;
+  cellBg: string;
+}
 
 const EPIC_STATUS_LABEL: Record<TimelineEpic["status"], string> = {
   NOT_STARTED: "Not started",
@@ -58,20 +61,63 @@ export function TimelineGrid({
   onNewTask: (epicId: string, trigger: HTMLElement) => void;
   onOpenEpic: (epic: TimelineEpic, trigger: HTMLElement) => void;
 }) {
+  // Non-date columns (waiting / unscheduled / overdue / future) are hidden
+  // when empty across all rows.
+  const leftCols: LeftCol[] = [];
+  if (rows.some((r) => r.waiting.length > 0))
+    leftCols.push({
+      key: "waiting",
+      label: "Waiting on someone",
+      width: W.waiting,
+      get: (r) => r.waiting,
+      showDate: true,
+      headerExtra: "",
+      cellBg: "bg-white",
+    });
+  if (rows.some((r) => r.unscheduled.length > 0))
+    leftCols.push({
+      key: "unscheduled",
+      label: "Unscheduled",
+      width: W.unscheduled,
+      get: (r) => r.unscheduled,
+      showDate: false,
+      headerExtra: "",
+      cellBg: "bg-white",
+    });
+  if (rows.some((r) => r.overdue.length > 0))
+    leftCols.push({
+      key: "overdue",
+      label: "Overdue",
+      width: W.overdue,
+      get: (r) => r.overdue,
+      showDate: true,
+      headerExtra: "bg-red-100 text-red-900",
+      cellBg: "bg-red-50",
+    });
+  const showFuture = rows.some((r) => r.future.length > 0);
+
+  // Cumulative sticky offsets: epic at 0, then each visible left column.
+  const leftOffsets: number[] = [];
+  {
+    let acc = W.epic;
+    for (const c of leftCols) {
+      leftOffsets.push(acc);
+      acc += c.width;
+    }
+  }
+
   const gridTemplateColumns = [
     `${W.epic}px`,
-    `${W.waiting}px`,
-    `${W.unscheduled}px`,
-    `${W.overdue}px`,
+    ...leftCols.map((c) => `${c.width}px`),
     ...buckets.map(() => `${W.bucket}px`),
-    `${W.future}px`,
+    ...(showFuture ? [`${W.future}px`] : []),
   ].join(" ");
 
-  const leftHeader = (i: number, label: string, extra = "") => (
+  const leftHeader = (left: number, label: string, extra = "") => (
     <div
       key={label}
       role="columnheader"
-      style={{ left: LEFT_OFFSETS[i], zIndex: 40 }}
+      style={{ left, zIndex: 40 }}
       className={`${cellBase} sticky top-0 bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500 ${extra}`}
     >
       {label}
@@ -88,9 +134,7 @@ export function TimelineGrid({
       <div className="grid min-w-max" style={{ gridTemplateColumns }}>
         {/* Header row */}
         {leftHeader(0, "Epic")}
-        {leftHeader(1, "Waiting on someone")}
-        {leftHeader(2, "Unscheduled")}
-        {leftHeader(3, "Overdue", "bg-red-100 text-red-900")}
+        {leftCols.map((c, i) => leftHeader(leftOffsets[i], c.label, c.headerExtra))}
         {buckets.map((b) => {
           const isToday = today >= b.start && today <= b.end;
           return (
@@ -108,13 +152,15 @@ export function TimelineGrid({
             </div>
           );
         })}
-        <div
-          role="columnheader"
-          style={{ zIndex: 40 }}
-          className={`${cellBase} sticky top-0 right-0 bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500`}
-        >
-          Future
-        </div>
+        {showFuture && (
+          <div
+            role="columnheader"
+            style={{ zIndex: 40 }}
+            className={`${cellBase} sticky top-0 right-0 bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500`}
+          >
+            Future
+          </div>
+        )}
 
         {/* Body rows (flat grid children; rows arrive pre-sorted from the API) */}
         {rows.map((row) => {
@@ -125,7 +171,7 @@ export function TimelineGrid({
               {/* Epic */}
               <div
                 id={`row-${row.epic.id}`}
-                style={{ left: LEFT_OFFSETS[0], zIndex: 20 }}
+                style={{ left: 0, zIndex: 20 }}
                 className={`${cellBase} ${stickyCell} scroll-mt-16 ${
                   hl ? "bg-lavender-100" : ""
                 }`}
@@ -151,43 +197,21 @@ export function TimelineGrid({
                 </button>
               </div>
 
-              {/* Waiting */}
-              <div
-                style={{ left: LEFT_OFFSETS[1], zIndex: 20 }}
-                className={`${cellBase} ${stickyCell}`}
-              >
-                <TaskList
-                  tasks={row.waiting}
-                  epicId={row.epic.id}
-                  onOpenTask={onOpenTask}
-                  showDate
-                />
-              </div>
-
-              {/* Unscheduled */}
-              <div
-                style={{ left: LEFT_OFFSETS[2], zIndex: 20 }}
-                className={`${cellBase} ${stickyCell}`}
-              >
-                <TaskList
-                  tasks={row.unscheduled}
-                  epicId={row.epic.id}
-                  onOpenTask={onOpenTask}
-                />
-              </div>
-
-              {/* Overdue */}
-              <div
-                style={{ left: LEFT_OFFSETS[3], zIndex: 20 }}
-                className={`${cellBase} sticky bg-red-50`}
-              >
-                <TaskList
-                  tasks={row.overdue}
-                  epicId={row.epic.id}
-                  onOpenTask={onOpenTask}
-                  showDate
-                />
-              </div>
+              {/* Waiting / Unscheduled / Overdue — hidden when empty across all rows */}
+              {leftCols.map((c, i) => (
+                <div
+                  key={c.key}
+                  style={{ left: leftOffsets[i], zIndex: 20 }}
+                  className={`${cellBase} sticky ${c.cellBg}`}
+                >
+                  <TaskList
+                    tasks={c.get(row)}
+                    epicId={row.epic.id}
+                    onOpenTask={onOpenTask}
+                    showDate={c.showDate}
+                  />
+                </div>
+              ))}
 
               {/* Date buckets */}
               {buckets.map((b) => {
@@ -207,18 +231,20 @@ export function TimelineGrid({
                 );
               })}
 
-              {/* Future */}
-              <div
-                style={{ zIndex: 20 }}
-                className={`${cellBase} sticky right-0 bg-white`}
-              >
-                <TaskList
-                  tasks={row.future}
-                  epicId={row.epic.id}
-                  onOpenTask={onOpenTask}
-                  showDate
-                />
-              </div>
+              {/* Future — hidden when empty across all rows */}
+              {showFuture && (
+                <div
+                  style={{ zIndex: 20 }}
+                  className={`${cellBase} sticky right-0 bg-white`}
+                >
+                  <TaskList
+                    tasks={row.future}
+                    epicId={row.epic.id}
+                    onOpenTask={onOpenTask}
+                    showDate
+                  />
+                </div>
+              )}
             </Fragment>
           );
         })}
