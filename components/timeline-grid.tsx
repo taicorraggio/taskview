@@ -11,13 +11,14 @@ import { TaskChip } from "./task-chip";
 
 // Fixed column widths (px). Sticky left columns need explicit offsets.
 const W = {
-  epic: 230,
-  waiting: 210,
-  unscheduled: 210,
-  overdue: 210,
+  epic: 200,
+  waiting: 150,
+  unscheduled: 150,
+  overdue: 150,
   bucket: 150,
   future: 230,
 };
+
 const LEFT_OFFSETS = [
   0,
   W.epic,
@@ -49,7 +50,11 @@ export function TimelineGrid({
   /** YYYY-MM-DD (client local) for the today highlight. */
   today: string;
   highlightedId: string | null;
-  onOpenTask: (task: TimelineTask, epicId: string, trigger: HTMLElement) => void;
+  onOpenTask: (
+    task: TimelineTask,
+    epicId: string,
+    trigger: HTMLElement,
+  ) => void;
   onNewTask: (epicId: string, trigger: HTMLElement) => void;
   onOpenEpic: (epic: TimelineEpic, trigger: HTMLElement) => void;
 }) {
@@ -85,11 +90,7 @@ export function TimelineGrid({
         {leftHeader(0, "Epic")}
         {leftHeader(1, "Waiting on someone")}
         {leftHeader(2, "Unscheduled")}
-        {leftHeader(
-          3,
-          "Overdue",
-          "bg-red-100 text-red-900",
-        )}
+        {leftHeader(3, "Overdue", "bg-red-100 text-red-900")}
         {buckets.map((b) => {
           const isToday = today >= b.start && today <= b.end;
           return (
@@ -234,7 +235,11 @@ function TaskList({
 }: {
   tasks: TimelineTask[];
   epicId: string;
-  onOpenTask: (task: TimelineTask, epicId: string, trigger: HTMLElement) => void;
+  onOpenTask: (
+    task: TimelineTask,
+    epicId: string,
+    trigger: HTMLElement,
+  ) => void;
   showDate?: boolean;
 }) {
   if (tasks.length === 0) return null;

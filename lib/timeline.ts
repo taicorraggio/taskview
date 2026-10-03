@@ -70,7 +70,9 @@ function isValidDate(s: string): boolean {
   const [y, m, d] = s.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   return (
-    dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
   );
 }
 
@@ -99,24 +101,44 @@ function startOfWeekMonday(s: string): string {
 /** ISO week number for keying week buckets (e.g. 2026-W44). */
 function isoWeekKey(s: string): string {
   // Thursday determines the ISO week-year.
-  const thursday = addDays(s, 3 - (((parseDate(s).getUTCDay() + 6) % 7)));
+  const thursday = addDays(s, 3 - ((parseDate(s).getUTCDay() + 6) % 7));
   const year = thursday.slice(0, 4);
   const jan4 = `${year}-01-04`;
-  const week = Math.round(
-    (parseDate(thursday).getTime() - parseDate(startOfWeekMonday(jan4)).getTime()) /
-      (7 * 86400_000),
-  ) + 1;
+  const week =
+    Math.round(
+      (parseDate(thursday).getTime() -
+        parseDate(startOfWeekMonday(jan4)).getTime()) /
+        (7 * 86400_000),
+    ) + 1;
   return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
 const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 function labelFor(s: string): string {
   const [, m, d] = s.split("-").map(Number);
   return `${MONTHS[m - 1]} ${d}`;
+}
+
+/** Week-bucket label as a range: "Oct 12 – 18", or "Sep 28 – Oct 4" across months. */
+function labelForRange(s: string, e: string): string {
+  const [, sm, sd] = s.split("-").map(Number);
+  const [, em, ed] = e.split("-").map(Number);
+  if (sm === em) return `${MONTHS[sm - 1]} ${sd} – ${ed}`;
+  return `${MONTHS[sm - 1]} ${sd} – ${MONTHS[em - 1]} ${ed}`;
 }
 
 export function todayUtc(): string {
@@ -139,8 +161,7 @@ export function getWindow(
   if (bucket !== "week" && bucket !== "day") {
     throw new Error(`bucket must be "week" or "day"`);
   }
-  const start =
-    from ?? startOfWeekMonday(addDays(todayUtc(), -7));
+  const start = from ?? startOfWeekMonday(todayUtc());
   const end = to ?? addDays(start, 12 * 7 - 1);
   if (!isValidDate(start)) throw new Error(`invalid from date: ${from}`);
   if (!isValidDate(end)) throw new Error(`invalid to date: ${to}`);
@@ -151,7 +172,12 @@ export function getWindow(
     let cur = startOfWeekMonday(start);
     while (cur <= end) {
       const bEnd = addDays(cur, 6);
-      buckets.push({ key: isoWeekKey(cur), label: labelFor(cur), start: cur, end: bEnd });
+      buckets.push({
+        key: isoWeekKey(cur),
+        label: labelForRange(cur, bEnd),
+        start: cur,
+        end: bEnd,
+      });
       cur = addDays(cur, 7);
     }
   } else {
@@ -199,7 +225,8 @@ export function bucketTasks(
   const inWindow: TimelineTask[] = [];
 
   for (const t of tasks) {
-    const isWaiting = t.waitingOn != null && t.waitingOn !== "" && t.status !== "DONE";
+    const isWaiting =
+      t.waitingOn != null && t.waitingOn !== "" && t.status !== "DONE";
     if (isWaiting) waiting.push(t);
 
     const done = t.status === "DONE";
@@ -257,7 +284,8 @@ const GROUP_ORDER: Record<SortGroup, number> = {
 function minDate(tasks: TimelineTask[]): string | null {
   let min: string | null = null;
   for (const t of tasks) {
-    if (t.scheduledDate && (min === null || t.scheduledDate < min)) min = t.scheduledDate;
+    if (t.scheduledDate && (min === null || t.scheduledDate < min))
+      min = t.scheduledDate;
   }
   return min;
 }
