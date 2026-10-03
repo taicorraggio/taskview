@@ -5,6 +5,10 @@ import { auth } from "@/lib/auth";
 import { AuthCard } from "@/components/auth-card";
 import { SignupForm } from "./signup-form";
 
+// Must be dynamic: SIGNUP_ENABLED is meant to be flipped at runtime
+// (on for initial account creation, off after) without rebuilding.
+export const dynamic = "force-dynamic";
+
 export default async function SignupPage() {
   // Server-side gate: public signup is off unless explicitly enabled.
   if (process.env.SIGNUP_ENABLED !== "true") {
