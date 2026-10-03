@@ -33,9 +33,16 @@ export const POST = withAuth(async (req, { user }) => {
     data: { userId: user.id, name: parsed.data.name, tokenHash },
     select: { id: true, name: true, createdAt: true },
   });
-  return NextResponse.json({ ...token, token }, { status: 201 });
+  return NextResponse.json(
+    { id: token.id, name: token.name, createdAt: token.createdAt, token: raw },
+    { status: 201 },
+  );
 });
 
 export async function DELETE() {
-  return apiError("method_not_allowed", "Use POST /api/tokens/[id]/revoke", 405);
+  return apiError(
+    "method_not_allowed",
+    "Use POST /api/tokens/[id]/revoke",
+    405,
+  );
 }

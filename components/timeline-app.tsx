@@ -80,7 +80,10 @@ export function TimelineApp({ user }: { user: CurrentUser }) {
       const w = data?.window;
       if (!w) return;
       const span = daysBetween(w.start, w.end) + 1;
-      setNav({ from: addDays(w.start, dir * span), to: addDays(w.end, dir * span) });
+      setNav({
+        from: addDays(w.start, dir * span),
+        to: addDays(w.end, dir * span),
+      });
     },
     [data],
   );
@@ -161,8 +164,8 @@ export function TimelineApp({ user }: { user: CurrentUser }) {
                   No epics yet
                 </h2>
                 <p className="mt-2 text-sm text-neutral-600">
-                  Epics are the big threads of your life — immigration, the
-                  Leaf import, the house. Add one, then break it into tasks on
+                  Epics are the big threads of your life: immigration, finding a
+                  new job, buying a house. Add one, then break it into tasks on
                   the timeline.
                 </p>
                 <button
