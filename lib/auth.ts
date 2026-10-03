@@ -25,4 +25,11 @@ export const auth = betterAuth({
   // set explicitly here so misconfiguration fails loudly at startup.
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
+  user: {
+    deleteUser: {
+      enabled: true,
+      // Epics/tasks/tokens cascade at the DB level (onDelete: Cascade),
+      // so deleting the user row cleans up all of their data.
+    },
+  },
 });

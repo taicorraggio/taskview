@@ -22,10 +22,10 @@ export const GET = withAuth(async (req, { user }) => {
   if (bucketParam !== undefined && bucketParam !== "week" && bucketParam !== "day") {
     return apiError("invalid_bucket", 'bucket must be "week" or "day"', 400);
   }
-  if (statusParam !== undefined) {
+  if (statusParam !== undefined && statusParam !== "all") {
     const parsed = epicStatusSchema.safeParse(statusParam);
     if (!parsed.success) {
-      return apiError("invalid_status", "status must be a valid EpicStatus", 400);
+      return apiError("invalid_status", "status must be a valid EpicStatus or 'all'", 400);
     }
   }
 
@@ -41,8 +41,13 @@ export const GET = withAuth(async (req, { user }) => {
   const epics = await prisma.epic.findMany({
     where: {
       ownerId: user.id,
-      // DONE epics are excluded by default; ?status= overrides (incl. DONE).
-      ...(statusParam ? { status: statusParam as never } : { status: { not: "DONE" } }),
+      // DONE epics are excluded by default; ?status= overrides (incl. DONE);
+      // ?status=all disables the filter entirely.
+      ...(statusParam
+        ? statusParam === "all"
+          ? {}
+          : { status: statusParam as never }
+        : { status: { not: "DONE" } }),
     },
     include: {
       owner: { select: { id: true, name: true } },

@@ -1,14 +1,14 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { TimelineApp } from "@/components/timeline-app";
+import { SettingsApp } from "@/components/settings-app";
 
-export default async function HomePage() {
+export default async function SettingsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
   return (
-    <TimelineApp
+    <SettingsApp
       user={{
         id: session.user.id,
         email: session.user.email,
