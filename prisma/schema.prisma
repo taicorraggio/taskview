@@ -1,0 +1,143 @@
+// Prisma schema for TaskView.
+// Spec: ~/workspace/taskview/PLAN.md (authoritative).
+// Better Auth tables (User/Session/Account/Verification) are required by the
+// Prisma adapter; our domain models (Epic/Task/ApiToken) hang off User.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth models (managed via the Prisma adapter)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id
+  email         String    @unique
+  name          String?
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  epics     Epic[]
+  tasks     Task[]
+  apiTokens ApiToken[]
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+}
+
+// ---------------------------------------------------------------------------
+// TaskView domain models
+// ---------------------------------------------------------------------------
+
+enum EpicStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  WAITING
+  DONE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model Epic {
+  id        String     @id @default(cuid())
+  name      String
+  status    EpicStatus @default(NOT_STARTED)
+  ownerId   String
+  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([ownerId])
+}
+
+model Task {
+  id      String  @id @default(cuid())
+  name    String
+  description String?
+  status  TaskStatus @default(TODO)
+  // Date-only (Postgres `date`). For waiting tasks this is the follow-up/nudge date.
+  scheduledDate DateTime? @db.Date
+  // Who the task is waiting on; null = not waiting. Independent of `status`.
+  waitingOn String?
+
+  epicId String
+  epic   Epic   @relation(fields: [epicId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([epicId])
+  @@index([ownerId, scheduledDate])
+}
+
+// Personal access tokens (assistant / script access to the API).
+// Only the SHA-256 hash is stored; the raw token is shown once at creation.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId])
+}

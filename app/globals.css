@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  /* Lavender accent scale (Tai's favorite color). 600/700 are dark enough
+     for white text at AA contrast; use 100/50 for tints/backgrounds. */
+  --color-lavender-50: #f6f3fd;
+  --color-lavender-100: #ece5fa;
+  --color-lavender-200: #d9cdf5;
+  --color-lavender-500: #8b6fe0;
+  --color-lavender-600: #7357d3;
+  --color-lavender-700: #5f45b8;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
