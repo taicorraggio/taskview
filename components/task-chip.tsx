@@ -3,6 +3,7 @@
 import { useToggleTaskStatus } from "@/lib/queries";
 import type { TimelineTask } from "@/lib/timeline";
 import { formatDate } from "@/lib/dates";
+import { OVERDUE_DOT, TASK_STATUS_DOT } from "@/lib/status-colors";
 
 const STATUS_LABEL: Record<TimelineTask["status"], string> = {
   TODO: "to do",
@@ -18,14 +19,18 @@ export function TaskChip({
   task,
   onOpen,
   showDate = false,
+  overdue = false,
 }: {
   task: TimelineTask;
   onOpen: (task: TimelineTask, trigger: HTMLElement) => void;
   /** Show the scheduled/follow-up date under the name (waiting column). */
   showDate?: boolean;
+  /** Derived overdue state — red takes precedence over the status color. */
+  overdue?: boolean;
 }) {
   const toggle = useToggleTaskStatus();
   const done = task.status === "DONE";
+  const dotClass = overdue ? OVERDUE_DOT : TASK_STATUS_DOT[task.status];
 
   return (
     <div
@@ -35,6 +40,11 @@ export function TaskChip({
           : "border-neutral-200 bg-white hover:border-lavender-500"
       }`}
     >
+      <span
+        aria-hidden="true"
+        title={`${STATUS_LABEL[task.status]}${overdue ? ", overdue" : ""}`}
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotClass}`}
+      />
       <button
         type="button"
         role="checkbox"
@@ -64,7 +74,7 @@ export function TaskChip({
       <button
         type="button"
         onClick={(e) => onOpen(task, e.currentTarget)}
-        aria-label={`Edit task "${task.name}" (${STATUS_LABEL[task.status]})`}
+        aria-label={`Edit task "${task.name}" (${STATUS_LABEL[task.status]}${overdue ? ", overdue" : ""})`}
         className="min-w-0 flex-1 rounded text-left focus-visible:outline-2 focus-visible:outline-lavender-600"
       >
         <span

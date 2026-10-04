@@ -8,6 +8,7 @@ import type {
   TimelineTask,
 } from "@/lib/timeline";
 import { TaskChip } from "./task-chip";
+import { EPIC_STATUS_DOT } from "@/lib/status-colors";
 
 // Fixed column widths (px). Sticky left columns need explicit offsets.
 // Kept slim: the date buckets are the hero, sticky columns are context.
@@ -111,7 +112,6 @@ export function TimelineGrid({
   buckets,
   rows,
   today,
-  highlightedId,
   onOpenTask,
   onNewTask,
   onOpenEpic,
@@ -120,7 +120,6 @@ export function TimelineGrid({
   rows: TimelineRow[];
   /** YYYY-MM-DD (client local) for the today highlight. */
   today: string;
-  highlightedId: string | null;
   onOpenTask: (
     task: TimelineTask,
     epicId: string,
@@ -144,6 +143,10 @@ export function TimelineGrid({
     setCollapsedRows((prev) => toggleIn(prev, id));
   const toggleCol = (key: string) =>
     setCollapsedCols((prev) => toggleIn(prev, key));
+
+  // Derived overdue state for color coding: incomplete + date before today.
+  const isOverdue = (t: TimelineTask) =>
+    t.status !== "DONE" && t.scheduledDate != null && t.scheduledDate < today;
 
   // Non-date columns (waiting / unscheduled / overdue / future) are hidden
   // when empty across all rows.
@@ -292,17 +295,13 @@ export function TimelineGrid({
         {/* Body rows (flat grid children; rows arrive pre-sorted from the API) */}
         {rows.map((row) => {
           const cellMap = new Map(row.cells.map((c) => [c.bucketKey, c.tasks]));
-          const hl = highlightedId === row.epic.id;
           const rowCollapsed = collapsedRows.has(row.epic.id);
           return (
             <Fragment key={row.epic.id}>
               {/* Epic */}
               <div
-                id={`row-${row.epic.id}`}
                 style={{ left: 0, zIndex: 20 }}
-                className={`${cellBase} ${stickyCell} scroll-mt-16 ${
-                  hl ? "bg-lavender-100" : ""
-                }`}
+                className={`${cellBase} ${stickyCell}`}
               >
                 <div className="flex items-center gap-1">
                   <CollapseToggle
@@ -318,21 +317,22 @@ export function TimelineGrid({
                   >
                     {row.epic.name}
                   </button>
+                  <span
+                    role="img"
+                    aria-label={EPIC_STATUS_LABEL[row.epic.status]}
+                    title={EPIC_STATUS_LABEL[row.epic.status]}
+                    className={`h-2 w-2 shrink-0 rounded-full ${EPIC_STATUS_DOT[row.epic.status]}`}
+                  />
                 </div>
                 {!rowCollapsed && (
-                  <>
-                    <p className="mt-0.5 text-xs text-neutral-500">
-                      {EPIC_STATUS_LABEL[row.epic.status]}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(e) => onNewTask(row.epic.id, e.currentTarget)}
-                      aria-label={`Add task to "${row.epic.name}"`}
-                      className="mt-1.5 rounded-md px-2 py-1 text-xs font-medium text-lavender-700 hover:bg-lavender-50 focus-visible:outline-2 focus-visible:outline-lavender-600"
-                    >
-                      + Task
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={(e) => onNewTask(row.epic.id, e.currentTarget)}
+                    aria-label={`Add task to "${row.epic.name}"`}
+                    className="mt-1.5 rounded-md px-2 py-1 text-xs font-medium text-lavender-700 hover:bg-lavender-50 focus-visible:outline-2 focus-visible:outline-lavender-600"
+                  >
+                    + Task
+                  </button>
                 )}
               </div>
 
@@ -349,7 +349,7 @@ export function TimelineGrid({
                     {rowCollapsed || colCollapsed ? (
                       <TaskDot
                         count={tasks.length}
-                        tone={c.key === "overdue" ? "red" : "neutral"}
+                        tone={tasks.some(isOverdue) ? "red" : "neutral"}
                       />
                     ) : (
                       <TaskList
@@ -357,6 +357,7 @@ export function TimelineGrid({
                         epicId={row.epic.id}
                         onOpenTask={onOpenTask}
                         showDate={c.showDate}
+                        isOverdue={isOverdue}
                       />
                     )}
                   </div>
@@ -374,32 +375,41 @@ export function TimelineGrid({
                     className={`${cellBase} ${isToday ? "bg-lavender-50/60" : ""}`}
                   >
                     {rowCollapsed || colCollapsed ? (
-                      <TaskDot count={tasks.length} />
+                      <TaskDot
+                        count={tasks.length}
+                        tone={tasks.some(isOverdue) ? "red" : "neutral"}
+                      />
                     ) : (
                       <TaskList
                         tasks={tasks}
                         epicId={row.epic.id}
                         onOpenTask={onOpenTask}
+                        isOverdue={isOverdue}
                       />
                     )}
                   </div>
                 );
               })}
 
-              {/* Future — hidden when empty across all rows */}
+              {/* Future — hidden when empty across all rows; shows only the
+                  next upcoming task beyond the visible window */}
               {showFuture && (
                 <div
                   style={{ zIndex: 20 }}
                   className={`${cellBase} sticky right-0 bg-white`}
                 >
                   {rowCollapsed || collapsedCols.has("future") ? (
-                    <TaskDot count={row.future.length} />
+                    <TaskDot
+                      count={row.future.length}
+                      tone={row.future.some(isOverdue) ? "red" : "neutral"}
+                    />
                   ) : (
                     <TaskList
-                      tasks={row.future}
+                      tasks={row.future.slice(0, 1)}
                       epicId={row.epic.id}
                       onOpenTask={onOpenTask}
                       showDate
+                      isOverdue={isOverdue}
                     />
                   )}
                 </div>
@@ -417,6 +427,7 @@ function TaskList({
   epicId,
   onOpenTask,
   showDate = false,
+  isOverdue,
 }: {
   tasks: TimelineTask[];
   epicId: string;
@@ -426,6 +437,7 @@ function TaskList({
     trigger: HTMLElement,
   ) => void;
   showDate?: boolean;
+  isOverdue: (t: TimelineTask) => boolean;
 }) {
   if (tasks.length === 0) return null;
   return (
@@ -435,6 +447,7 @@ function TaskList({
           <TaskChip
             task={t}
             showDate={showDate}
+            overdue={isOverdue(t)}
             onOpen={(task, trigger) => onOpenTask(task, epicId, trigger)}
           />
         </li>

@@ -15,8 +15,7 @@ export function TopBar({
   onNext,
   showDone,
   onShowDoneChange,
-  sidebarOpen,
-  onToggleSidebar,
+  onNewEpic,
   navDisabled,
 }: {
   user: CurrentUser;
@@ -27,23 +26,11 @@ export function TopBar({
   onNext: () => void;
   showDone: boolean;
   onShowDoneChange: (v: boolean) => void;
-  sidebarOpen: boolean;
-  onToggleSidebar: () => void;
+  onNewEpic: (trigger: HTMLElement) => void;
   navDisabled: boolean;
 }) {
   return (
     <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-200 bg-white px-4 py-2.5">
-      <button
-        type="button"
-        onClick={onToggleSidebar}
-        aria-expanded={sidebarOpen}
-        aria-label={sidebarOpen ? "Hide epic sidebar" : "Show epic sidebar"}
-        className="rounded-md p-1.5 text-neutral-600 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-lavender-600"
-      >
-        <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
-          <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      </button>
       <Link
         href="/"
         className="text-lg font-semibold text-neutral-900 focus-visible:outline-2 focus-visible:outline-lavender-600"
@@ -100,6 +87,14 @@ export function TopBar({
         />
         Show done
       </label>
+
+      <button
+        type="button"
+        onClick={(e) => onNewEpic(e.currentTarget)}
+        className="rounded-md px-2 py-1.5 text-sm font-medium text-lavender-700 hover:bg-lavender-50 focus-visible:outline-2 focus-visible:outline-lavender-600"
+      >
+        + Epic
+      </button>
 
       <div className="ml-auto flex items-center gap-2">
         <span className="hidden text-sm text-neutral-500 sm:inline">

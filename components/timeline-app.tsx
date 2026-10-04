@@ -5,7 +5,6 @@ import type { BucketName, TimelineEpic, TimelineTask } from "@/lib/timeline";
 import { useTimeline, type CurrentUser } from "@/lib/queries";
 import { addDays, daysBetween } from "@/lib/dates";
 import { TopBar } from "./top-bar";
-import { EpicSidebar } from "./epic-sidebar";
 import { TimelineGrid } from "./timeline-grid";
 import { SlideOverPanel } from "./slide-over-panel";
 import { TaskForm } from "./task-form";
@@ -51,11 +50,8 @@ export function TimelineApp({ user }: { user: CurrentUser }) {
   const [nav, setNav] = useState<{ from?: string; to?: string }>({});
   const [bucket, setBucket] = useState<BucketName>("week");
   const [showDone, setShowDone] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [panel, setPanel] = useState<PanelState | null>(null);
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useTimeline(
     nav.from,
@@ -88,15 +84,6 @@ export function TimelineApp({ user }: { user: CurrentUser }) {
     [data],
   );
 
-  const selectEpic = useCallback((epicId: string) => {
-    document
-      .getElementById(`row-${epicId}`)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    setHighlightedId(epicId);
-    if (highlightTimer.current) clearTimeout(highlightTimer.current);
-    highlightTimer.current = setTimeout(() => setHighlightedId(null), 2500);
-  }, []);
-
   const epicsForSelect = (data?.rows ?? []).map((r) => ({
     id: r.epic.id,
     name: r.epic.name,
@@ -113,23 +100,13 @@ export function TimelineApp({ user }: { user: CurrentUser }) {
         onNext={() => shiftWindow(1)}
         showDone={showDone}
         onShowDoneChange={setShowDone}
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onNewEpic={(trigger) =>
+          openPanel({ kind: "epic-create", title: "New epic" }, trigger)
+        }
         navDisabled={!data || isLoading}
       />
 
       <div className="flex min-h-0 flex-1">
-        {sidebarOpen && data && (
-          <EpicSidebar
-            rows={data.rows}
-            highlightedId={highlightedId}
-            onSelect={selectEpic}
-            onNewEpic={(trigger) =>
-              openPanel({ kind: "epic-create", title: "New epic" }, trigger)
-            }
-          />
-        )}
-
         <main className="flex min-w-0 flex-1 flex-col" aria-label="Timeline">
           {isLoading && (
             <div className="flex flex-1 items-center justify-center">
@@ -189,7 +166,6 @@ export function TimelineApp({ user }: { user: CurrentUser }) {
               buckets={data.buckets}
               rows={data.rows}
               today={localToday()}
-              highlightedId={highlightedId}
               onOpenTask={(task, epicId, trigger) =>
                 openPanel(
                   { kind: "task-edit", task, epicId, title: "Edit task" },
