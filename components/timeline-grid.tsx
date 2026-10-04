@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import type {
   Bucket,
   TimelineEpic,
@@ -148,6 +148,38 @@ export function TimelineGrid({
   const isOverdue = (t: TimelineTask) =>
     t.status !== "DONE" && t.scheduledDate != null && t.scheduledDate < today;
 
+  // Track the horizontal scroll viewport so the "future" column can preview
+  // the first task after the rightmost *visible* bucket (not just after the
+  // fetched window). Measured synchronously on mount; rAF-throttled after.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ scrollLeft: 0, width: 0 });
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        setViewport((prev) => {
+          const scrollLeft = el.scrollLeft;
+          const width = el.clientWidth;
+          return prev.scrollLeft === scrollLeft && prev.width === width
+            ? prev
+            : { scrollLeft, width };
+        });
+      });
+    };
+    setViewport({ scrollLeft: el.scrollLeft, width: el.clientWidth });
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
   // Non-date columns (waiting / unscheduled / overdue / future) are hidden
   // when empty across all rows.
   const leftCols: LeftCol[] = [];
@@ -203,6 +235,26 @@ export function TimelineGrid({
     ...(showFuture ? [`${colWidth("future", W.future)}px`] : []),
   ].join(" ");
 
+  // End date of the rightmost visible date bucket — the "visible window".
+  // A bucket counts as visible when at least half of it is uncovered
+  // (sticky columns don't count). Falls back to the last fetched bucket.
+  const stickyLeftW =
+    W.epic + leftCols.reduce((s, c) => s + colWidth(c.key, c.width), 0);
+  const futureW = showFuture ? colWidth("future", W.future) : 0;
+  let cutoff = buckets.length > 0 ? buckets[buckets.length - 1].end : "";
+  {
+    let x = stickyLeftW;
+    const viewStart = viewport.scrollLeft + stickyLeftW;
+    const viewEnd = viewport.scrollLeft + viewport.width - futureW;
+    for (const b of buckets) {
+      const w = colWidth(b.key, W.bucket);
+      const uncovered =
+        Math.max(0, Math.min(x + w, viewEnd) - Math.max(x, viewStart));
+      if (uncovered >= w * 0.5) cutoff = b.end;
+      x += w;
+    }
+  }
+
   const leftHeader = (left: number, col: LeftCol) => {
     const collapsed = collapsedCols.has(col.key);
     return (
@@ -224,6 +276,7 @@ export function TimelineGrid({
 
   return (
     <div
+      ref={scrollRef}
       role="region"
       aria-label="Timeline grid"
       tabIndex={0}
@@ -296,6 +349,30 @@ export function TimelineGrid({
         {rows.map((row) => {
           const cellMap = new Map(row.cells.map((c) => [c.bucketKey, c.tasks]));
           const rowCollapsed = collapsedRows.has(row.epic.id);
+          // First task the user can't see: earliest incomplete task dated
+          // after the visible window. Waiting tasks are excluded — the
+          // waiting column is always visible, so they aren't "unseen".
+          const waitingIds = new Set(row.waiting.map((t) => t.id));
+          const upcoming: TimelineTask[] = [];
+          const consider = (t: TimelineTask) => {
+            if (
+              t.status === "DONE" ||
+              t.scheduledDate == null ||
+              t.scheduledDate <= cutoff ||
+              waitingIds.has(t.id)
+            )
+              return;
+            upcoming.push(t);
+          };
+          for (const c of row.cells) for (const t of c.tasks) consider(t);
+          for (const t of row.future) {
+            if (t.status !== "DONE" && !waitingIds.has(t.id)) upcoming.push(t);
+          }
+          upcoming.sort((a, b) => {
+            if (a.scheduledDate !== b.scheduledDate)
+              return a.scheduledDate! < b.scheduledDate! ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
           return (
             <Fragment key={row.epic.id}>
               {/* Epic */}
@@ -391,8 +468,10 @@ export function TimelineGrid({
                 );
               })}
 
-              {/* Future — hidden when empty across all rows; shows only the
-                  next upcoming task beyond the visible window */}
+              {/* Future — hidden when empty across all rows. Shows the first
+                  task after the rightmost *visible* bucket; advances as you
+                  scroll right, ending at the first task past the fetched
+                  range. */}
               {showFuture && (
                 <div
                   style={{ zIndex: 20 }}
@@ -400,12 +479,12 @@ export function TimelineGrid({
                 >
                   {rowCollapsed || collapsedCols.has("future") ? (
                     <TaskDot
-                      count={row.future.length}
-                      tone={row.future.some(isOverdue) ? "red" : "neutral"}
+                      count={upcoming.length}
+                      tone={upcoming.some(isOverdue) ? "red" : "neutral"}
                     />
                   ) : (
                     <TaskList
-                      tasks={row.future.slice(0, 1)}
+                      tasks={upcoming.slice(0, 1)}
                       epicId={row.epic.id}
                       onOpenTask={onOpenTask}
                       showDate
